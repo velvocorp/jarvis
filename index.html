@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>JARVIS</title>
+
+<!-- PWA / installazione come app su iPhone -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --blue: #00d9ff;
+    --blue-dim: #0088aa;
+    --bg: #000000;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    width:100%; height:100%;
+    background: radial-gradient(circle at 50% 40%, #001015 0%, #000000 70%);
+    color: var(--blue);
+    font-family: 'Courier New', monospace;
+    overflow:hidden;
+    -webkit-user-select:none; user-select:none;
+  }
+  #app{
+    position:relative;
+    width:100%; height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+  }
+
+  /* Scanlines / vignette overlay */
+  #overlay{
+    position:fixed; inset:0; pointer-events:none;
+    background: repeating-linear-gradient(0deg, rgba(0,217,255,0.03) 0px, rgba(0,217,255,0.03) 1px, transparent 1px, transparent 3px);
+    z-index:50;
+  }
+
+  /* ---- Central circle ---- */
+  #core-wrap{
+    position:relative;
+    width:min(60vw, 320px);
+    height:min(60vw, 320px);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .ring{
+    position:absolute;
+    border-radius:50%;
+    border:1px solid var(--blue-dim);
+    opacity:0.6;
+  }
+  .ring1{ inset:0; border-width:1px; animation: spin 14s linear infinite; }
+  .ring2{ inset:10%; border-style:dashed; opacity:0.35; animation: spin 22s linear infinite reverse; }
+  .ring3{ inset:20%; opacity:0.5; animation: pulse 2.5s ease-in-out infinite; }
+
+  #core{
+    position:relative;
+    width:55%; height:55%;
+    border-radius:50%;
+    background: radial-gradient(circle at 50% 45%, rgba(0,217,255,0.35), rgba(0,217,255,0.05) 60%, transparent 75%);
+    box-shadow: 0 0 40px 6px rgba(0,217,255,0.35), inset 0 0 30px rgba(0,217,255,0.4);
+    display:flex; align-items:center; justify-content:center;
+    animation: coreBreathe 3s ease-in-out infinite;
+  }
+  #core-label{
+    font-size: clamp(18px, 4vw, 26px);
+    letter-spacing: 4px;
+    font-weight:bold;
+    color:#eafcff;
+    text-shadow: 0 0 12px var(--blue), 0 0 24px var(--blue);
+  }
+  #status-label{
+    position:absolute;
+    bottom:-34px;
+    font-size:11px;
+    letter-spacing:3px;
+    color: var(--blue-dim);
+    text-transform:uppercase;
+  }
+
+  @keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  @keyframes pulse{ 0%,100%{opacity:0.3; transform:scale(1);} 50%{opacity:0.7; transform:scale(1.04);} }
+  @keyframes coreBreathe{ 0%,100%{ box-shadow: 0 0 40px 6px rgba(0,217,255,0.35), inset 0 0 30px rgba(0,217,255,0.4);} 50%{ box-shadow: 0 0 60px 12px rgba(0,217,255,0.55), inset 0 0 40px rgba(0,217,255,0.6);} }
+
+  /* ---- Bottom-left: live position ---- */
+  #geo-box{
+    position:fixed;
+    bottom:24px; left:20px;
+    font-size:11px;
+    line-height:1.5;
+    color: var(--blue);
+    opacity:0.85;
+    max-width:200px;
+  }
+  #geo-box .tag{ color:var(--blue-dim); letter-spacing:2px; font-size:10px;}
+
+  /* ---- Bottom-center: clock ---- */
+  #clock-box{
+    position:fixed;
+    bottom:24px; left:50%; transform:translateX(-50%);
+    text-align:center;
+  }
+  #clock-time{
+    font-size:22px; letter-spacing:2px;
+    text-shadow: 0 0 10px var(--blue);
+  }
+  #clock-date{
+    font-size:10px; letter-spacing:2px; color:var(--blue-dim); margin-top:2px;
+  }
+
+  /* ---- Right side: mic / mode ---- */
+  #mic-btn{
+    position:fixed;
+    bottom:22px; right:20px;
+    width:56px; height:56px;
+    border-radius:50%;
+    border:1px solid var(--blue);
+    background: rgba(0,217,255,0.08);
+    color: var(--blue);
+    font-size:22px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  #mic-btn.listening{
+    animation: pulse 1s ease-in-out infinite;
+    background: rgba(0,217,255,0.25);
+  }
+
+  /* ---- Conversation feed under the circle ---- */
+  #feed{
+    position:fixed;
+    top: calc(50% + min(30vw,160px) + 60px);
+    left:50%; transform:translateX(-50%);
+    width:min(92vw, 480px);
+    max-height:28vh;
+    overflow-y:auto;
+    font-size:12.5px;
+    line-height:1.5;
+    text-align:center;
+    padding: 0 10px;
+  }
+  #feed .line{ margin-bottom:8px; opacity:0.9; }
+  #feed .jarvis{ color: var(--blue); }
+  #feed .user{ color: #8fe9ff; opacity:0.7; }
+  #feed .system{ color: #ffb400; font-size:11px; }
+
+  /* ---- Settings ---- */
+  #gear{
+    position:fixed; top:16px; right:16px;
+    color:var(--blue-dim); font-size:18px; cursor:pointer; z-index:60;
+  }
+  #settings{
+    position:fixed; inset:0; background:rgba(0,0,0,0.92);
+    display:none; align-items:center; justify-content:center; z-index:70;
+    flex-direction:column; gap:14px; padding:20px;
+  }
+  #settings.open{display:flex;}
+  #settings input{
+    width:min(90vw,340px); padding:10px; background:#001217; border:1px solid var(--blue-dim);
+    color:var(--blue); font-family:monospace; font-size:13px; border-radius:4px;
+  }
+  #settings button, #close-settings{
+    padding:10px 20px; background:transparent; border:1px solid var(--blue);
+    color:var(--blue); font-family:monospace; letter-spacing:2px; cursor:pointer; border-radius:4px;
+  }
+  #settings label{ font-size:11px; letter-spacing:2px; color:var(--blue-dim); align-self:flex-start; margin-left:calc(50% - 170px);}
+
+  #top-left-title{
+    position:fixed; top:16px; left:20px;
+    font-size:11px; letter-spacing:3px; color:var(--blue-dim);
+  }
+
+  /* ---- Lock screen ---- */
+  #lock-screen{
+    position:fixed; inset:0; z-index:200;
+    background: radial-gradient(circle at 50% 40%, #001015 0%, #000000 70%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:16px; padding:20px;
+  }
+  #lock-ring{
+    width:90px; height:90px; border-radius:50%;
+    border:2px solid var(--blue);
+    box-shadow: 0 0 30px 4px rgba(0,217,255,0.4), inset 0 0 20px rgba(0,217,255,0.3);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  #lock-title{
+    font-size:20px; letter-spacing:6px; color:#eafcff;
+    text-shadow: 0 0 12px var(--blue);
+  }
+  #lock-subtitle{
+    font-size:11px; letter-spacing:2px; color:var(--blue-dim);
+  }
+  #lock-input{
+    width:min(80vw, 260px); padding:12px; text-align:center;
+    background:#001217; border:1px solid var(--blue-dim);
+    color:var(--blue); font-family:monospace; font-size:16px;
+    letter-spacing:4px; border-radius:6px;
+  }
+  #lock-btn{
+    padding:10px 28px; background:transparent; border:1px solid var(--blue);
+    color:var(--blue); font-family:monospace; letter-spacing:3px; cursor:pointer;
+    border-radius:4px; font-size:12px;
+  }
+  #lock-error{
+    font-size:11px; color:#ff5566; letter-spacing:1px; min-height:14px;
+  }
+  #main-content{ display:none; }
+</style>
+</head>
+<body>
+<div id="overlay"></div>
+
+<!-- ===== SCHERMATA DI BLOCCO CON PASSWORD ===== -->
+<div id="lock-screen">
+  <div id="lock-ring"></div>
+  <div id="lock-title">J A R V I S</div>
+  <div id="lock-subtitle" id="lockSubtitle">Inserisci la password</div>
+  <input type="password" id="lock-input" autocomplete="off" placeholder="••••••">
+  <button id="lock-btn" onclick="tryUnlock()">SBLOCCA</button>
+  <div id="lock-error"></div>
+</div>
+<div id="main-content">
+<div id="top-left-title">V E L V O &nbsp;// &nbsp;J.A.R.V.I.S.</div>
+<div id="gear" onclick="openSettings()">⚙</div>
+
+<div id="app">
+  <div id="core-wrap">
+    <div class="ring ring1"></div>
+    <div class="ring ring2"></div>
+    <div class="ring ring3"></div>
+    <div id="core">
+      <div id="core-label">JARVIS</div>
+    </div>
+    <div id="status-label">In attesa</div>
+  </div>
+</div>
+
+<div id="feed"></div>
+
+<div id="geo-box">
+  <div class="tag">POSIZIONE</div>
+  <div id="geo-text">rilevamento...</div>
+</div>
+
+<div id="clock-box">
+  <div id="clock-time">--:--:--</div>
+  <div id="clock-date">-- --- ----</div>
+</div>
+
+<div id="mic-btn" onclick="toggleListen()" title="Attiva/disattiva ascolto continuo">🎙</div>
+
+<div id="settings">
+  <label>Groq API Key</label>
+  <input id="apiKeyInput" type="password" placeholder="Incolla qui la tua Groq API key">
+  <button onclick="saveSettings()">SALVA</button>
+  <button id="close-settings" onclick="closeSettings()">CHIUDI</button>
+</div>
+
+</div><!-- /#main-content -->
+
+<script>
+/* ================== ACCESSO CON PASSWORD ================== */
+const PWD_KEY = 'jarvis_pwd_hash';
+const UNLOCK_SESSION_KEY = 'jarvis_unlocked';
+
+function simpleHash(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++){ h = (Math.imul(31,h) + str.charCodeAt(i))|0; }
+  return h.toString(36);
+}
+
+function initLock(){
+  const stored = localStorage.getItem(PWD_KEY);
+  const input = document.getElementById('lock-input');
+  const sub = document.getElementById('lock-subtitle');
+
+  // gia' sbloccato in questa sessione del browser
+  if(sessionStorage.getItem(UNLOCK_SESSION_KEY) === '1'){
+    showMain();
+    return;
+  }
+
+  if(!stored){
+    sub.textContent = 'Imposta la tua password personale';
+  }
+  input.addEventListener('keydown', (e) => { if(e.key === 'Enter') tryUnlock(); });
+  input.focus();
+}
+
+function tryUnlock(){
+  const stored = localStorage.getItem(PWD_KEY);
+  const input = document.getElementById('lock-input');
+  const err = document.getElementById('lock-error');
+  const val = input.value;
+
+  if(!val){ err.textContent = 'Inserisci una password.'; return; }
+
+  if(!stored){
+    // prima configurazione: questa diventa la password
+    localStorage.setItem(PWD_KEY, simpleHash(val));
+    sessionStorage.setItem(UNLOCK_SESSION_KEY, '1');
+    showMain();
+    return;
+  }
+
+  if(simpleHash(val) === stored){
+    sessionStorage.setItem(UNLOCK_SESSION_KEY, '1');
+    showMain();
+  } else {
+    err.textContent = 'Password errata.';
+    input.value = '';
+  }
+}
+
+function showMain(){
+  document.getElementById('lock-screen').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+}
+
+initLock();
+
+/* ================== CONFIG / MEMORY ================== */
+const MEM_KEY = 'jarvis_hud_memory';
+const APIKEY_KEY = 'jarvis_hud_apikey';
+
+function loadMemory(){
+  try{ return JSON.parse(localStorage.getItem(MEM_KEY) || '[]'); }catch(e){ return []; }
+}
+function saveMemory(list){ localStorage.setItem(MEM_KEY, JSON.stringify(list)); }
+
+function getApiKey(){ return localStorage.getItem(APIKEY_KEY) || ''; }
+function setApiKey(k){ localStorage.setItem(APIKEY_KEY, k); }
+
+function openSettings(){
+  document.getElementById('apiKeyInput').value = getApiKey();
+  document.getElementById('settings').classList.add('open');
+}
+function closeSettings(){ document.getElementById('settings').classList.remove('open'); }
+function saveSettings(){
+  const v = document.getElementById('apiKeyInput').value.trim();
+  if(v) setApiKey(v);
+  closeSettings();
+  addLine('system', 'Chiave API salvata.');
+}
+
+/* ================== CLOCK ================== */
+function tickClock(){
+  const now = new Date();
+  const opts = { timeZone: 'Europe/Rome' };
+  const time = now.toLocaleTimeString('it-IT', {...opts, hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  const date = now.toLocaleDateString('it-IT', {...opts, weekday:'short', day:'2-digit', month:'short', year:'numeric'});
+  document.getElementById('clock-time').textContent = time;
+  document.getElementById('clock-date').textContent = date.toUpperCase();
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+/* ================== GEO ================== */
+function updateGeo(){
+  const box = document.getElementById('geo-text');
+  if(!navigator.geolocation){
+    box.textContent = 'non disponibile';
+    return;
+  }
+  navigator.geolocation.watchPosition(
+    (pos) => {
+      const lat = pos.coords.latitude.toFixed(4);
+      const lon = pos.coords.longitude.toFixed(4);
+      box.innerHTML = `LAT ${lat}<br>LON ${lon}`;
+    },
+    (err) => { box.textContent = 'accesso negato'; },
+    { enableHighAccuracy:true, maximumAge:5000 }
+  );
+}
+updateGeo();
+
+/* ================== FEED ================== */
+function addLine(type, text){
+  const feed = document.getElementById('feed');
+  const div = document.createElement('div');
+  div.className = 'line ' + type;
+  const prefix = type==='jarvis' ? 'JARVIS: ' : type==='user' ? 'TU: ' : '';
+  div.textContent = prefix + text;
+  feed.appendChild(div);
+  feed.scrollTop = feed.scrollHeight;
+  while(feed.children.length > 12){ feed.removeChild(feed.firstChild); }
+}
+
+function setStatus(s){ document.getElementById('status-label').textContent = s; }
+
+/* ================== SPEECH: STT ================== */
+let recognition = null;
+let listening = false;      // is recognition actively capturing right now
+let continuousMode = false; // hands-free mode: auto-restart after every phrase
+let speakingNow = false;    // true while JARVIS is talking (mic paused)
+let restartTimer = null;
+
+function initRecognition(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ addLine('system', 'Riconoscimento vocale non supportato su questo browser.'); return null; }
+  const r = new SR();
+  r.lang = 'it-IT';
+  r.continuous = false;
+  r.interimResults = false;
+
+  r.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    addLine('user', text);
+    handleCommand(text);
+  };
+  r.onerror = (e) => {
+    listening = false;
+    // "no-speech" / "aborted" are normal in hands-free loops, just retry silently
+    scheduleRestart();
+  };
+  r.onend = () => {
+    listening = false;
+    scheduleRestart();
+  };
+  return r;
+}
+
+function scheduleRestart(){
+  if(!continuousMode || speakingNow) {
+    document.getElementById('mic-btn').classList.remove('listening');
+    if(!speakingNow) setStatus('In attesa');
+    return;
+  }
+  clearTimeout(restartTimer);
+  restartTimer = setTimeout(() => {
+    if(continuousMode && !speakingNow && !listening) startRecognition();
+  }, 350);
+}
+
+function startRecognition(){
+  if(!recognition) recognition = initRecognition();
+  if(!recognition) return;
+  try{
+    recognition.start();
+    listening = true;
+    document.getElementById('mic-btn').classList.add('listening');
+    setStatus('In ascolto');
+  }catch(e){ /* already started, ignore */ }
+}
+
+function toggleListen(){
+  // iOS/Safari audio unlock - needs a real tap the first time
+  unlockAudio();
+  continuousMode = !continuousMode;
+  if(continuousMode){
+    addLine('system', 'Ascolto continuo attivato: puoi parlarmi liberamente, senza toccare nulla.');
+    startRecognition();
+  } else {
+    addLine('system', 'Ascolto continuo disattivato.');
+    if(recognition) recognition.stop();
+    document.getElementById('mic-btn').classList.remove('listening');
+    setStatus('In attesa');
+  }
+}
+
+/* ================== SPEECH: TTS ================== */
+let audioUnlocked = false;
+function unlockAudio(){
+  if(audioUnlocked) return;
+  const u = new SpeechSynthesisUtterance('');
+  window.speechSynthesis.speak(u);
+  audioUnlocked = true;
+}
+function speak(text){
+  // pause mic while JARVIS talks, so it doesn't hear itself
+  speakingNow = true;
+  if(recognition && listening){ try{ recognition.stop(); }catch(e){} }
+
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'it-IT';
+  u.rate = 1.0;
+  u.pitch = 0.9;
+  const voices = window.speechSynthesis.getVoices();
+  const itVoice = voices.find(v => v.lang && v.lang.startsWith('it'));
+  if(itVoice) u.voice = itVoice;
+  setStatus('Sto parlando');
+  u.onend = () => {
+    speakingNow = false;
+    setStatus('In attesa');
+    if(continuousMode) startRecognition();
+  };
+  window.speechSynthesis.speak(u);
+}
+
+/* ================== COMMAND HANDLING ================== */
+// pending confirmation state
+let pending = null; // { type:'remember', content:'...' }
+
+async function handleCommand(text){
+  const lower = text.toLowerCase().trim();
+
+  // handle yes/no confirmation for a pending action
+  if(pending){
+    if(/^(s[iì]|si|esatto|confermo|giusto|ok|va bene)/.test(lower)){
+      finalizePending();
+      return;
+    }
+    if(/^(no|non è cos[iì]|sbagliato|annulla)/.test(lower)){
+      addLine('jarvis', 'Va bene, annullato.');
+      speak('Va bene, annullato.');
+      pending = null;
+      return;
+    }
+    // if unclear, fall through and re-ask
+  }
+
+  // explicit "ricorda/ricordami" trigger
+  const rememberMatch = lower.match(/^(ricorda(mi)?|memorizza|segna(ti)?)\s+(che\s+|di\s+)?(.+)/);
+  if(rememberMatch){
+    const content = rememberMatch[5];
+    pending = { type:'remember', content };
+    const q = `Vuoi che ricordi: "${content}"? Confermi?`;
+    addLine('jarvis', q);
+    speak(q);
+    return;
+  }
+
+  // "cosa ricordi" / list memory
+  if(/cosa (ti )?ricordi|elenca (i )?ricordi|mostra (i )?ricordi/.test(lower)){
+    const mem = loadMemory();
+    if(mem.length===0){
+      const r = 'Non ho ancora nulla salvato in memoria.';
+      addLine('jarvis', r); speak(r);
+    } else {
+      const list = mem.map(m=>m.content).join('; ');
+      addLine('jarvis', 'Ecco cosa ricordo: ' + list);
+      speak('Ecco cosa ricordo: ' + list);
+    }
+    return;
+  }
+
+  // default: send to Groq LLM with memory context, if key present
+  const key = getApiKey();
+  if(!key){
+    const r = 'Non ho ancora una chiave API configurata. Apri le impostazioni in alto a destra.';
+    addLine('jarvis', r); speak(r);
+    return;
+  }
+  setStatus('Elaboro');
+  try{
+    const reply = await askGroq(text);
+    addLine('jarvis', reply);
+    speak(reply);
+  }catch(e){
+    const r = 'Ho avuto un problema a contattare il server. Riprova.';
+    addLine('jarvis', r); speak(r);
+  }
+}
+
+function finalizePending(){
+  if(!pending) return;
+  if(pending.type === 'remember'){
+    const mem = loadMemory();
+    mem.push({ content: pending.content, date: new Date().toISOString() });
+    saveMemory(mem);
+    const r = 'Fatto, l\'ho salvato in memoria.';
+    addLine('jarvis', r);
+    speak(r);
+  }
+  pending = null;
+}
+
+/* ================== GROQ CALL ================== */
+async function askGroq(userText){
+  const key = getApiKey();
+  const mem = loadMemory();
+  const memText = mem.length
+    ? 'Cose che l\'utente ti ha chiesto di ricordare: ' + mem.map(m=>m.content).join('; ')
+    : 'Non hai ancora nessun ricordo salvato.';
+
+  const systemPrompt = `Sei JARVIS, l'assistente AI di Federico (Velvo Corp), ispirato al Jarvis di Iron Man. Rispondi sempre in italiano, in modo intelligente, elegante e con un tocco di sarcasmo British. Sii conciso (massimo 2-3 frasi) perché la risposta verrà letta a voce alta. ${memText}`;
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + key
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role:'system', content: systemPrompt },
+        { role:'user', content: userText }
+      ],
+      max_tokens: 300
+    })
+  });
+  if(!res.ok) throw new Error('API error');
+  const data = await res.json();
+  return data.choices[0].message.content.trim();
+}
+
+/* ================== INIT ================== */
+window.speechSynthesis.onvoiceschanged = () => {}; // pre-warm voices list
+if(!getApiKey()){
+  setTimeout(()=> addLine('system', 'Suggerimento: tocca l\'ingranaggio in alto a destra per inserire la tua Groq API key.'), 800);
+}
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
