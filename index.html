@@ -17,6 +17,7 @@
     --blue: #00d9ff;
     --blue-dim: #0088aa;
     --bg: #000000;
+    --state-color: #00d9ff; /* cambia in base allo stato: idle/ascolto/elaborazione/parla */
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{
@@ -58,38 +59,86 @@
     border:1px solid var(--blue-dim);
     opacity:0.6;
   }
-  .ring1{ inset:0; border-width:1px; animation: spin 14s linear infinite; }
-  .ring2{ inset:10%; border-style:dashed; opacity:0.35; animation: spin 22s linear infinite reverse; }
-  .ring3{ inset:20%; opacity:0.5; animation: pulse 2.5s ease-in-out infinite; }
+  .ring1{ inset:0; border-width:1px; animation: spin 14s linear infinite; border-color: color-mix(in srgb, var(--state-color) 70%, transparent); }
+  .ring2{ inset:10%; border-style:dashed; opacity:0.35; animation: spin 22s linear infinite reverse; border-color: color-mix(in srgb, var(--state-color) 70%, transparent); }
+  .ring3{ inset:20%; opacity:0.5; animation: pulse 2.5s ease-in-out infinite; border-color: color-mix(in srgb, var(--state-color) 70%, transparent); }
+
+  /* anello segmentato esterno che ruota - stile "mirino" HUD */
+  #seg-ring{
+    position:absolute; inset:-10%;
+    width:120%; height:120%;
+    animation: spin 8s linear infinite;
+  }
 
   #core{
     position:relative;
     width:55%; height:55%;
     border-radius:50%;
-    background: radial-gradient(circle at 50% 45%, rgba(0,217,255,0.35), rgba(0,217,255,0.05) 60%, transparent 75%);
-    box-shadow: 0 0 40px 6px rgba(0,217,255,0.35), inset 0 0 30px rgba(0,217,255,0.4);
+    background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--state-color) 35%, transparent), color-mix(in srgb, var(--state-color) 5%, transparent) 60%, transparent 75%);
+    box-shadow: 0 0 40px 6px color-mix(in srgb, var(--state-color) 35%, transparent), inset 0 0 30px color-mix(in srgb, var(--state-color) 40%, transparent);
     display:flex; align-items:center; justify-content:center;
     animation: coreBreathe 3s ease-in-out infinite;
+    transition: background 0.4s ease, box-shadow 0.4s ease;
   }
   #core-label{
     font-size: clamp(18px, 4vw, 26px);
     letter-spacing: 4px;
     font-weight:bold;
     color:#eafcff;
-    text-shadow: 0 0 12px var(--blue), 0 0 24px var(--blue);
+    text-shadow: 0 0 12px var(--state-color), 0 0 24px var(--state-color);
+    transition: text-shadow 0.4s ease;
   }
   #status-label{
     position:absolute;
     bottom:-34px;
     font-size:11px;
     letter-spacing:3px;
-    color: var(--blue-dim);
+    color: var(--state-color);
     text-transform:uppercase;
+    transition: color 0.4s ease;
   }
 
   @keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
   @keyframes pulse{ 0%,100%{opacity:0.3; transform:scale(1);} 50%{opacity:0.7; transform:scale(1.04);} }
-  @keyframes coreBreathe{ 0%,100%{ box-shadow: 0 0 40px 6px rgba(0,217,255,0.35), inset 0 0 30px rgba(0,217,255,0.4);} 50%{ box-shadow: 0 0 60px 12px rgba(0,217,255,0.55), inset 0 0 40px rgba(0,217,255,0.6);} }
+  @keyframes coreBreathe{ 0%,100%{ opacity: 0.9; } 50%{ opacity: 1; } }
+
+  /* ---- Equalizzatore vocale (visibile mentre ascolta/parla) ---- */
+  #eq{
+    position:absolute;
+    bottom:-58px;
+    display:flex; align-items:flex-end; gap:3px;
+    height:16px;
+    opacity:0;
+    transition: opacity 0.3s ease;
+  }
+  #eq.active{ opacity:1; }
+  #eq span{
+    width:3px; background: var(--state-color);
+    border-radius:2px;
+    animation: eqBounce 0.9s ease-in-out infinite;
+  }
+  #eq span:nth-child(1){ animation-delay: 0s; }
+  #eq span:nth-child(2){ animation-delay: 0.12s; }
+  #eq span:nth-child(3){ animation-delay: 0.24s; }
+  #eq span:nth-child(4){ animation-delay: 0.36s; }
+  #eq span:nth-child(5){ animation-delay: 0.48s; }
+  @keyframes eqBounce{
+    0%,100%{ height:4px; }
+    50%{ height:16px; }
+  }
+
+  /* ---- Cornici angolari stile HUD/mirino ---- */
+  .hud-corner{
+    position:fixed; width:26px; height:26px;
+    border-color: var(--blue-dim);
+    opacity:0.55;
+    z-index:40;
+    pointer-events:none;
+  }
+  .hud-corner.tl{ top:14px; left:14px; border-top:2px solid; border-left:2px solid; }
+  .hud-corner.tr{ top:14px; right:14px; border-top:2px solid; border-right:2px solid; }
+  .hud-corner.bl{ bottom:14px; left:14px; border-bottom:2px solid; border-left:2px solid; }
+  .hud-corner.br{ bottom:14px; right:14px; border-bottom:2px solid; border-right:2px solid; }
 
   /* ---- Bottom-left: live position ---- */
   #geo-box{
@@ -230,10 +279,18 @@
 </div>
 <div id="main-content">
 <div id="top-left-title">V E L V O &nbsp;// &nbsp;J.A.R.V.I.S.</div>
-<div id="gear" onclick="openSettings()">⚙</div>
+
+<div class="hud-corner tl"></div>
+<div class="hud-corner tr"></div>
+<div class="hud-corner bl"></div>
+<div class="hud-corner br"></div>
 
 <div id="app">
   <div id="core-wrap">
+    <svg id="seg-ring" viewBox="0 0 200 200">
+      <circle cx="100" cy="100" r="94" fill="none" stroke="var(--state-color)" stroke-width="2"
+        stroke-dasharray="10 14" opacity="0.55"/>
+    </svg>
     <div class="ring ring1"></div>
     <div class="ring ring2"></div>
     <div class="ring ring3"></div>
@@ -241,6 +298,7 @@
       <div id="core-label">JARVIS</div>
     </div>
     <div id="status-label">In attesa</div>
+    <div id="eq"><span></span><span></span><span></span><span></span><span></span></div>
   </div>
 </div>
 
@@ -257,13 +315,6 @@
 </div>
 
 <div id="mic-btn" onclick="toggleListen()" title="Attiva/disattiva ascolto continuo">🎙</div>
-
-<div id="settings">
-  <label>Groq API Key</label>
-  <input id="apiKeyInput" type="password" placeholder="Incolla qui la tua Groq API key">
-  <button onclick="saveSettings()">SALVA</button>
-  <button id="close-settings" onclick="closeSettings()">CHIUDI</button>
-</div>
 
 </div><!-- /#main-content -->
 
@@ -330,27 +381,11 @@ initLock();
 
 /* ================== CONFIG / MEMORY ================== */
 const MEM_KEY = 'jarvis_hud_memory';
-const APIKEY_KEY = 'jarvis_hud_apikey';
 
 function loadMemory(){
   try{ return JSON.parse(localStorage.getItem(MEM_KEY) || '[]'); }catch(e){ return []; }
 }
 function saveMemory(list){ localStorage.setItem(MEM_KEY, JSON.stringify(list)); }
-
-function getApiKey(){ return localStorage.getItem(APIKEY_KEY) || ''; }
-function setApiKey(k){ localStorage.setItem(APIKEY_KEY, k); }
-
-function openSettings(){
-  document.getElementById('apiKeyInput').value = getApiKey();
-  document.getElementById('settings').classList.add('open');
-}
-function closeSettings(){ document.getElementById('settings').classList.remove('open'); }
-function saveSettings(){
-  const v = document.getElementById('apiKeyInput').value.trim();
-  if(v) setApiKey(v);
-  closeSettings();
-  addLine('system', 'Chiave API salvata.');
-}
 
 /* ================== CLOCK ================== */
 function tickClock(){
@@ -395,7 +430,27 @@ function addLine(type, text){
   while(feed.children.length > 12){ feed.removeChild(feed.firstChild); }
 }
 
-function setStatus(s){ document.getElementById('status-label').textContent = s; }
+function setStatus(s){
+  document.getElementById('status-label').textContent = s;
+
+  // colore di stato + equalizzatore: cosi' si capisce a colpo d'occhio
+  // cosa sta facendo Jarvis, non solo leggendo il testo
+  const root = document.documentElement.style;
+  const eq = document.getElementById('eq');
+  if(s === 'In ascolto'){
+    root.setProperty('--state-color', '#00ff9d');
+    eq.classList.add('active');
+  } else if(s === 'Elaboro'){
+    root.setProperty('--state-color', '#ffb400');
+    eq.classList.remove('active');
+  } else if(s === 'Sto parlando'){
+    root.setProperty('--state-color', '#eafcff');
+    eq.classList.add('active');
+  } else {
+    root.setProperty('--state-color', '#00d9ff');
+    eq.classList.remove('active');
+  }
+}
 
 /* ================== SPEECH: STT ================== */
 let recognition = null;
@@ -403,30 +458,55 @@ let listening = false;      // is recognition actively capturing right now
 let continuousMode = false; // hands-free mode: auto-restart after every phrase
 let speakingNow = false;    // true while JARVIS is talking (mic paused)
 let restartTimer = null;
+let silenceTimer = null;
+let finalTranscript = '';
 
 function initRecognition(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SR){ addLine('system', 'Riconoscimento vocale non supportato su questo browser.'); return null; }
   const r = new SR();
   r.lang = 'it-IT';
-  r.continuous = false;
-  r.interimResults = false;
+  // interim results + silenzio gestito a mano: cosi' non taglia la frase
+  // troppo presto (il rilevamento automatico del browser e' pensato per
+  // il microfono di uno smartphone e su desktop e' molto piu' aggressivo)
+  r.continuous = true;
+  r.interimResults = true;
 
   r.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    addLine('user', text);
-    handleCommand(text);
+    let interim = '';
+    for(let i = e.resultIndex; i < e.results.length; i++){
+      const chunk = e.results[i][0].transcript;
+      if(e.results[i].isFinal){
+        finalTranscript += chunk + ' ';
+      } else {
+        interim += chunk;
+      }
+    }
+    // ogni volta che sente qualcosa (anche parziale) resetta il timer
+    // di silenzio: la frase si considera finita solo dopo una pausa vera
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => finalizeSpeech(), 1400);
   };
   r.onerror = (e) => {
     listening = false;
-    // "no-speech" / "aborted" are normal in hands-free loops, just retry silently
     scheduleRestart();
   };
   r.onend = () => {
     listening = false;
+    finalizeSpeech();
     scheduleRestart();
   };
   return r;
+}
+
+function finalizeSpeech(){
+  clearTimeout(silenceTimer);
+  const text = finalTranscript.trim();
+  finalTranscript = '';
+  if(text){
+    addLine('user', text);
+    handleCommand(text);
+  }
 }
 
 function scheduleRestart(){
@@ -444,6 +524,7 @@ function scheduleRestart(){
 function startRecognition(){
   if(!recognition) recognition = initRecognition();
   if(!recognition) return;
+  finalTranscript = '';
   try{
     recognition.start();
     listening = true;
@@ -469,12 +550,36 @@ function toggleListen(){
 
 /* ================== SPEECH: TTS ================== */
 let audioUnlocked = false;
+let voicesReady = false;
+let cachedItVoice = null;
+
+function loadVoices(){
+  const voices = window.speechSynthesis.getVoices();
+  if(voices.length){
+    cachedItVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('it')) || null;
+    voicesReady = true;
+  }
+}
+window.speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
 function unlockAudio(){
   if(audioUnlocked) return;
   const u = new SpeechSynthesisUtterance('');
   window.speechSynthesis.speak(u);
   audioUnlocked = true;
 }
+
+// Bug noto di Chrome desktop: dopo qualche secondo di inattivita' la
+// sintesi vocale puo' "addormentarsi" e non emettere piu' audio pur
+// restando in stato "speaking". Questo tenerla sveglia risolve il problema.
+setInterval(() => {
+  if(window.speechSynthesis.speaking){
+    window.speechSynthesis.pause();
+    window.speechSynthesis.resume();
+  }
+}, 4000);
+
 function speak(text){
   // pause mic while JARVIS talks, so it doesn't hear itself
   speakingNow = true;
@@ -485,9 +590,8 @@ function speak(text){
   u.lang = 'it-IT';
   u.rate = 1.0;
   u.pitch = 0.9;
-  const voices = window.speechSynthesis.getVoices();
-  const itVoice = voices.find(v => v.lang && v.lang.startsWith('it'));
-  if(itVoice) u.voice = itVoice;
+  u.volume = 1.0;
+  if(cachedItVoice) u.voice = cachedItVoice;
   setStatus('Sto parlando');
   u.onend = () => {
     speakingNow = false;
@@ -544,13 +648,7 @@ async function handleCommand(text){
     return;
   }
 
-  // default: send to Groq LLM with memory context, if key present
-  const key = getApiKey();
-  if(!key){
-    const r = 'Non ho ancora una chiave API configurata. Apri le impostazioni in alto a destra.';
-    addLine('jarvis', r); speak(r);
-    return;
-  }
+  // default: send to Groq LLM (tramite server) con memoria come contesto
   setStatus('Elaboro');
   try{
     const reply = await askGroq(text);
@@ -575,42 +673,24 @@ function finalizePending(){
   pending = null;
 }
 
-/* ================== GROQ CALL ================== */
+/* ================== GROQ CALL (tramite funzione server /api/chat) ================== */
 async function askGroq(userText){
-  const key = getApiKey();
   const mem = loadMemory();
   const memText = mem.length
     ? 'Cose che l\'utente ti ha chiesto di ricordare: ' + mem.map(m=>m.content).join('; ')
     : 'Non hai ancora nessun ricordo salvato.';
 
-  const systemPrompt = `Sei JARVIS, l'assistente AI di Federico (Velvo Corp), ispirato al Jarvis di Iron Man. Rispondi sempre in italiano, in modo intelligente, elegante e con un tocco di sarcasmo British. Sii conciso (massimo 2-3 frasi) perché la risposta verrà letta a voce alta. ${memText}`;
-
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await fetch('/api/chat', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + key
-    },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        { role:'system', content: systemPrompt },
-        { role:'user', content: userText }
-      ],
-      max_tokens: 300
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: userText, memoryText: memText })
   });
   if(!res.ok) throw new Error('API error');
   const data = await res.json();
-  return data.choices[0].message.content.trim();
+  return data.reply;
 }
 
 /* ================== INIT ================== */
-window.speechSynthesis.onvoiceschanged = () => {}; // pre-warm voices list
-if(!getApiKey()){
-  setTimeout(()=> addLine('system', 'Suggerimento: tocca l\'ingranaggio in alto a destra per inserire la tua Groq API key.'), 800);
-}
-
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(()=>{});
